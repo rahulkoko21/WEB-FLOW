@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Stage, Outlet } from './types.ts';
+import { Stage, Outlet, StageLog } from './types.ts';
 import { STAGES, STAGE_ORDER } from './constants.ts';
 import OutletCard from './components/OutletCard.tsx';
 import AddOutletModal from './components/AddOutletModal.tsx';
@@ -19,6 +19,33 @@ const App: React.FC = () => {
   const [selectedOutletForAI, setSelectedOutletForAI] = useState<Outlet | null>(null);
   const [aiReport, setAiReport] = useState<any>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Live Clock Update
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  // Format the live date
+  const formattedLiveDate = useMemo(() => {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(currentTime);
+  }, [currentTime]);
+
+  const formattedLiveTime = useMemo(() => {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    }).format(currentTime);
+  }, [currentTime]);
 
   // Initialize data safely
   useEffect(() => {
@@ -32,26 +59,24 @@ const App: React.FC = () => {
             id: '1',
             name: 'Urban Bites - Downtown',
             description: 'Premium cloud kitchen specializing in fusion street food.',
-            note: 'Requires high-capacity gas lines.',
             currentStage: Stage.ONBOARDING_REQUEST,
             createdAt: Date.now() - 86400000 * 2,
             lastMovedAt: Date.now() - 86400000 * 2,
             priority: 'high',
-            history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 2 }]
+            history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 2, note: 'Initial request received.' }]
           },
           {
             id: '2',
             name: 'Green Leaf Salads',
             description: 'Health-conscious salad bar with focus on organic produce.',
-            note: 'Menu approval pending chef review of vegan options.',
             currentStage: Stage.CHEF_APPROVAL,
             createdAt: Date.now() - 86400000 * 5,
             lastMovedAt: Date.now() - 86400000,
             priority: 'medium',
             history: [
-              { stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 5 },
-              { stage: Stage.OVERLAP_CHECK, timestamp: Date.now() - 86400000 * 3 },
-              { stage: Stage.CHEF_APPROVAL, timestamp: Date.now() - 86400000 }
+              { stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 5, note: 'Documentation complete.' },
+              { stage: Stage.OVERLAP_CHECK, timestamp: Date.now() - 86400000 * 3, note: 'No territory overlaps found.' },
+              { stage: Stage.CHEF_APPROVAL, timestamp: Date.now() - 86400000, note: 'Menu pending tasting session.' }
             ]
           }
         ];
@@ -74,12 +99,11 @@ const App: React.FC = () => {
       id: Math.random().toString(36).substr(2, 9),
       name,
       description,
-      note,
       currentStage: Stage.ONBOARDING_REQUEST,
       createdAt: Date.now(),
       lastMovedAt: Date.now(),
       priority,
-      history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() }]
+      history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now(), note }]
     };
     setOutlets(prev => [...prev, newOutlet]);
   };
@@ -91,7 +115,27 @@ const App: React.FC = () => {
   };
 
   const handleUpdateNote = (id: string, note: string) => {
-    setOutlets(prev => prev.map(o => o.id === id ? { ...o, note } : o));
+    setOutlets(prev => prev.map(o => {
+      if (o.id === id) {
+        const newHistory = [...o.history];
+        
+        let currentIdx = -1;
+        for (let i = newHistory.length - 1; i >= 0; i--) {
+          if (newHistory[i].stage === o.currentStage) {
+            currentIdx = i;
+            break;
+          }
+        }
+
+        if (currentIdx !== -1) {
+          newHistory[currentIdx] = { ...newHistory[currentIdx], note };
+        } else {
+          newHistory.push({ stage: o.currentStage, timestamp: Date.now(), note });
+        }
+        return { ...o, history: newHistory };
+      }
+      return o;
+    }));
   };
 
   const handleSaveEdit = (updatedOutlet: Outlet) => {
@@ -106,7 +150,9 @@ const App: React.FC = () => {
         
         if (nextIndex >= 0 && nextIndex < STAGE_ORDER.length) {
           const newStage = STAGE_ORDER[nextIndex];
-          const newHistory = [...(o.history || []), { stage: newStage, timestamp: Date.now() }];
+          const newHistory = [...(o.history || [])];
+          newHistory.push({ stage: newStage, timestamp: Date.now() });
+          
           return {
             ...o,
             currentStage: newStage,
@@ -138,7 +184,7 @@ const App: React.FC = () => {
     return outlets.filter(o => 
       o.name.toLowerCase().includes(term) || 
       o.description.toLowerCase().includes(term) || 
-      (o.note?.toLowerCase().includes(term))
+      o.history.some(h => h.note?.toLowerCase().includes(term))
     );
   }, [outlets, searchTerm]);
 
@@ -150,9 +196,16 @@ const App: React.FC = () => {
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100 shrink-0">
               <i className="fa-solid fa-layer-group text-white text-lg sm:text-xl"></i>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 shrink-0">
               <h1 className="text-base sm:text-xl font-black text-slate-800 tracking-tight leading-none">Outlet Ops</h1>
-              <p className="text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5">Pipeline</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Pipeline</p>
+                <span className="text-slate-200 text-[8px]">|</span>
+                <p className="text-indigo-500 text-[9px] sm:text-[10px] font-bold whitespace-nowrap">
+                  <i className="fa-regular fa-calendar-check mr-1"></i>
+                  {formattedLiveDate} <span className="ml-1 opacity-70">{formattedLiveTime}</span>
+                </p>
+              </div>
             </div>
           </div>
 
@@ -162,7 +215,7 @@ const App: React.FC = () => {
             </div>
             <input
               type="text"
-              placeholder="Search outlets..."
+              placeholder="Search outlets or notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-full sm:rounded-2xl py-2.5 sm:py-3 pl-10 pr-10 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white transition-all shadow-sm"
@@ -244,14 +297,10 @@ const App: React.FC = () => {
       </main>
 
       <footer className="hidden sm:block bg-white border-t border-slate-200 px-6 py-2.5 safe-bottom">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between text-[9px] font-medium text-slate-400 uppercase tracking-widest">
-          <div className="flex gap-4">
-            <span>&copy; 2024 Outlet Ops</span>
-            <span className="text-indigo-400">Host Ready v3.1</span>
-          </div>
+        <div className="max-w-[1600px] mx-auto flex items-center justify-end text-[9px] font-medium text-slate-400 uppercase tracking-widest">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Platform Online</span>
+            <span>Per-Stage Notes Active</span>
           </div>
         </div>
       </footer>

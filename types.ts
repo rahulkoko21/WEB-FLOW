@@ -14,6 +14,7 @@ export enum Stage {
 export interface StageLog {
   stage: Stage;
   timestamp: number;
+  note?: string;
 }
 
 export interface Outlet {
@@ -33,4 +34,5 @@ export interface StageInfo {
   label: string;
   color: string;
   icon: string;
+  targetDays: number; // New: Target days to complete this stage
 }

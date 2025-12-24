@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Outlet, Stage } from '../types.ts';
 import { STAGE_ORDER } from '../constants.ts';
 
@@ -15,7 +14,25 @@ interface OutletCardProps {
 
 const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDelete, onShowHistory, onUpdateNote, onEdit }) => {
   const [isEditingNote, setIsEditingNote] = useState(false);
-  const [tempNote, setTempNote] = useState(outlet.note || '');
+  
+  const currentStageNote = useMemo(() => {
+    // FIX: Manual loop replacement for findLast to support older TypeScript targets
+    let lastLog = undefined;
+    for (let i = outlet.history.length - 1; i >= 0; i--) {
+      if (outlet.history[i].stage === outlet.currentStage) {
+        lastLog = outlet.history[i];
+        break;
+      }
+    }
+    return lastLog?.note || '';
+  }, [outlet.history, outlet.currentStage]);
+
+  const [tempNote, setTempNote] = useState(currentStageNote);
+
+  // Sync tempNote when stage changes or history updates externally
+  React.useEffect(() => {
+    setTempNote(currentStageNote);
+  }, [currentStageNote]);
 
   const stageIndex = STAGE_ORDER.indexOf(outlet.currentStage);
   const canMoveBackward = stageIndex > 0;
@@ -37,7 +54,7 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
 
   const handleCancelNote = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setTempNote(outlet.note || '');
+    setTempNote(currentStageNote);
     setIsEditingNote(false);
   };
 
@@ -54,7 +71,7 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
           <button 
             onClick={(e) => { e.stopPropagation(); setIsEditingNote(!isEditingNote); }}
             className={`text-slate-300 hover:text-amber-500 transition-colors ${isEditingNote ? 'text-amber-500' : ''}`}
-            title="Edit Notes"
+            title="Edit Stage Note"
           >
             <i className="fa-solid fa-note-sticky text-xs"></i>
           </button>
@@ -90,7 +107,7 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => setTempNote(e.target.value)}
             className="w-full text-[11px] p-2 bg-amber-50 border border-amber-200 rounded-lg outline-none focus:ring-1 focus:ring-amber-300 resize-none"
-            placeholder="Add a note..."
+            placeholder={`Note for ${outlet.currentStage}...`}
             rows={3}
           />
           <div className="flex justify-end gap-1 mt-1">
@@ -98,17 +115,17 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
             <button onClick={handleSaveNote} className="text-[9px] font-bold bg-amber-500 text-white px-2 py-1 rounded shadow-sm hover:bg-amber-600">Save</button>
           </div>
         </div>
-      ) : outlet.note ? (
-        <div className="mb-4 p-2 bg-slate-50 rounded-lg border-l-2 border-slate-200">
-          <p className="text-[10px] text-slate-600 line-clamp-2 italic">
-            "{outlet.note}"
+      ) : currentStageNote ? (
+        <div className="mb-4 p-2 bg-amber-50/30 rounded-lg border-l-2 border-amber-200">
+          <p className="text-[10px] text-amber-900 line-clamp-2 italic">
+            "{currentStageNote}"
           </p>
         </div>
       ) : null}
 
       <div className="flex items-center text-[10px] text-slate-400 mb-4">
         <i className="fa-regular fa-clock mr-1"></i>
-        {daysInStage === 0 ? 'Added today' : `${daysInStage}d in stage`}
+        {daysInStage === 0 ? 'Moved today' : `${daysInStage}d in stage`}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-50 pt-3">

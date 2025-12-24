@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Outlet, Stage } from '../types.ts';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, Stage, StageLog } from '../types.ts';
 import { STAGES } from '../constants.ts';
 
 interface EditOutletModalProps {
@@ -11,12 +11,39 @@ interface EditOutletModalProps {
 
 const EditOutletModal: React.FC<EditOutletModalProps> = ({ outlet, onClose, onSave }) => {
   const [formData, setFormData] = useState<Outlet>({ ...outlet });
+  const [editingStageNote, setEditingStageNote] = useState<Stage | null>(null);
+  const [tempStageNote, setTempStageNote] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
+  const firstRender = useRef(true);
+
+  // Auto-save effect with debounce
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      onSave(formData);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [formData, onSave]);
 
   const handleStageChange = (newStage: Stage) => {
     if (newStage === formData.currentStage) return;
     
-    const existingLogIndex = formData.history.findIndex(h => h.stage === newStage);
     let newHistory = [...formData.history];
+    
+    let existingLogIndex = -1;
+    for (let i = newHistory.length - 1; i >= 0; i--) {
+      if (newHistory[i].stage === newStage) {
+        existingLogIndex = i;
+        break;
+      }
+    }
     
     if (existingLogIndex === -1) {
       newHistory.push({ stage: newStage, timestamp: Date.now() });
@@ -32,16 +59,47 @@ const EditOutletModal: React.FC<EditOutletModalProps> = ({ outlet, onClose, onSa
     });
   };
 
+  const handleEditNote = (stage: Stage, currentNote: string = '') => {
+    setEditingStageNote(stage);
+    setTempStageNote(currentNote);
+  };
+
+  const handleSaveStageNote = () => {
+    if (!editingStageNote) return;
+    
+    const newHistory = [...formData.history];
+    
+    let logIdx = -1;
+    for (let i = newHistory.length - 1; i >= 0; i--) {
+      if (newHistory[i].stage === editingStageNote) {
+        logIdx = i;
+        break;
+      }
+    }
+    
+    if (logIdx !== -1) {
+      newHistory[logIdx] = { ...newHistory[logIdx], note: tempStageNote };
+    } else {
+      newHistory.push({ stage: editingStageNote, timestamp: Date.now(), note: tempStageNote });
+    }
+
+    setFormData({ ...formData, history: newHistory });
+    setEditingStageNote(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
     onClose();
   };
 
-  const getStageDate = (stageId: Stage) => {
-    const log = formData.history.find(h => h.stage === stageId);
-    if (!log) return null;
-    return new Intl.DateTimeFormat('en-GB').format(new Date(log.timestamp));
+  const getStageLog = (stageId: Stage) => {
+    for (let i = formData.history.length - 1; i >= 0; i--) {
+      if (formData.history[i].stage === stageId) {
+        return formData.history[i];
+      }
+    }
+    return undefined;
   };
 
   return (
@@ -49,8 +107,16 @@ const EditOutletModal: React.FC<EditOutletModalProps> = ({ outlet, onClose, onSa
       <div className="bg-white rounded-[32px] w-full max-w-4xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300 flex flex-col max-h-[90vh]">
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-20">
           <div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight">Outlet Configuration</h3>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Management Interface</p>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xl font-black text-slate-800 tracking-tight">Outlet Configuration</h3>
+              {isSaved && (
+                <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full animate-in fade-in slide-in-from-left-2">
+                  <i className="fa-solid fa-cloud-arrow-up"></i>
+                  CHANGES SAVED
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Management Interface • Auto-saving active</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-50 text-slate-400 transition-colors">
             <i className="fa-solid fa-xmark text-lg"></i>
@@ -70,46 +136,69 @@ const EditOutletModal: React.FC<EditOutletModalProps> = ({ outlet, onClose, onSa
               <div className="space-y-10 relative">
                 {STAGES.map((s, index) => {
                   const isActive = formData.currentStage === s.id;
-                  const date = getStageDate(s.id);
-                  const isCompleted = !!date && !isActive;
+                  const log = getStageLog(s.id);
+                  const isCompleted = !!log && !isActive;
 
                   return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => handleStageChange(s.id)}
-                      className="flex gap-6 w-full text-left group items-start outline-none"
-                    >
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center z-10 shadow-sm transition-all shrink-0 ring-4 ring-white ${
-                        isActive 
-                          ? 'bg-[#5D5CDE] text-white scale-110 shadow-[#5D5CDE]/30' 
-                          : isCompleted 
-                            ? 'bg-slate-100 text-slate-400' 
-                            : 'bg-slate-50 text-slate-200'
-                      }`}>
-                        <i className={`fa-solid ${s.icon} ${isActive ? 'text-base' : 'text-sm'}`}></i>
-                      </div>
+                    <div key={s.id} className="relative group">
+                      <div className="flex gap-6 w-full text-left items-start">
+                        <button
+                          type="button"
+                          onClick={() => handleStageChange(s.id)}
+                          className={`w-11 h-11 rounded-full flex items-center justify-center z-10 shadow-sm transition-all shrink-0 ring-4 ring-white ${
+                            isActive 
+                              ? 'bg-[#5D5CDE] text-white scale-110 shadow-[#5D5CDE]/30' 
+                              : isCompleted 
+                                ? 'bg-slate-100 text-slate-400' 
+                                : 'bg-slate-50 text-slate-200'
+                          }`}
+                        >
+                          <i className={`fa-solid ${s.icon} ${isActive ? 'text-base' : 'text-sm'}`}></i>
+                        </button>
 
-                      <div className="pt-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[11px] font-black opacity-30 ${isActive ? 'text-[#5D5CDE] opacity-60' : ''}`}>
-                            {index + 1}.
-                          </span>
-                          <h5 className={`text-[13px] font-bold uppercase tracking-wide transition-colors ${
-                            isActive ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-600'
-                          }`}>
-                            {s.label}
-                          </h5>
+                        <div className="pt-0.5 flex-1 pr-8">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[11px] font-black opacity-30 ${isActive ? 'text-[#5D5CDE] opacity-60' : ''}`}>
+                              {index + 1}.
+                            </span>
+                            <h5 className={`text-[13px] font-bold uppercase tracking-wide transition-colors ${
+                              isActive ? 'text-slate-800' : 'text-slate-400'
+                            }`}>
+                              {s.label}
+                            </h5>
+                          </div>
+                          
+                          {editingStageNote === s.id ? (
+                            <div className="mt-2 space-y-2">
+                              <textarea
+                                autoFocus
+                                value={tempStageNote}
+                                onChange={(e) => setTempStageNote(e.target.value)}
+                                className="w-full text-[11px] p-2 bg-white border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 resize-none font-medium"
+                                rows={2}
+                              />
+                              <div className="flex gap-1 justify-end">
+                                <button type="button" onClick={() => setEditingStageNote(null)} className="text-[9px] font-bold text-slate-400 px-2 py-1">Cancel</button>
+                                <button type="button" onClick={handleSaveStageNote} className="text-[9px] font-bold bg-indigo-600 text-white px-2 py-1 rounded">Save Note</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-0.5 relative">
+                              <p className="text-[11px] text-slate-400 font-medium leading-tight italic">
+                                {log?.note ? `"${log.note}"` : isActive ? 'Processing...' : 'No notes.'}
+                              </p>
+                              <button 
+                                type="button"
+                                onClick={() => handleEditNote(s.id, log?.note)}
+                                className="absolute -right-6 top-0 opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-indigo-600 transition-all p-1"
+                              >
+                                <i className="fa-solid fa-pen-to-square text-[10px]"></i>
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-[11px] text-slate-400 font-medium mt-0.5 leading-tight">
-                          {isActive 
-                            ? 'Currently processing in this stage.' 
-                            : date 
-                              ? `Transitioned through this stage on ${date}.` 
-                              : 'Pending progression.'}
-                        </p>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -170,17 +259,6 @@ const EditOutletModal: React.FC<EditOutletModalProps> = ({ outlet, onClose, onSa
                       placeholder="Add a brief description..."
                     />
                   </div>
-
-                  <div>
-                    <span className="text-[11px] font-bold text-slate-400 ml-1 mb-1 block">Internal Strategy Notes</span>
-                    <textarea
-                      value={formData.note}
-                      onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                      rows={4}
-                      className="w-full px-5 py-4 bg-amber-50/50 border border-amber-100 rounded-2xl focus:ring-4 focus:ring-amber-500/10 outline-none text-sm text-slate-700 resize-none italic leading-relaxed"
-                      placeholder="Capture operational notes here..."
-                    />
-                  </div>
                 </div>
               </section>
             </div>
@@ -191,13 +269,13 @@ const EditOutletModal: React.FC<EditOutletModalProps> = ({ outlet, onClose, onSa
                 onClick={onClose}
                 className="flex-1 px-8 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
               >
-                Cancel
+                Close Window
               </button>
               <button
                 type="submit"
                 className="flex-[2] px-8 py-4 bg-[#5D5CDE] text-white rounded-2xl font-bold hover:bg-[#4d4cbd] transition-all shadow-xl shadow-indigo-100 active:scale-95"
               >
-                Apply Configuration
+                Done Editing
               </button>
             </div>
           </form>
