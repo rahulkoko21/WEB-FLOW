@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Outlet, Stage, OutletStatus } from '../types.ts';
 import { STAGES, STAGE_ORDER, BRANDS, CITIES, STATUSES } from '../constants.ts';
@@ -20,7 +21,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
   const defaultEnd = new Date();
   defaultEnd.setHours(23, 59, 59, 999);
   const defaultStart = new Date();
-  defaultStart.setDate(defaultStart.getDate() - 30); // Default to 30 days for broader context
+  defaultStart.setDate(defaultStart.getDate() - 30); 
   defaultStart.setHours(0, 0, 0, 0);
 
   const [dateRange, setDateRange] = useState({
@@ -68,8 +69,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
       const matchCity = !selectedDashboardCity || o.city === selectedDashboardCity;
       const matchStatus = !selectedDashboardStatus || o.status === selectedDashboardStatus;
       
-      // Date filter: check if any activity (history) happened within the range
-      // OR if the outlet was created during this range.
       const hasActivityInRange = o.history.some(h => h.timestamp >= dateRange.start && h.timestamp <= dateRange.end);
       const createdInRange = o.createdAt >= dateRange.start && o.createdAt <= dateRange.end;
       
@@ -79,7 +78,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
 
   // --- Core Calculations for Dashboard ---
   const dashboardStats = useMemo(() => {
-    // Portfolio Total: Count outlets matching filters but IGNORING the date range
     const portfolioTotal = outlets.filter(o => {
       const matchBrand = !selectedDashboardBrand || o.brand === selectedDashboardBrand;
       const matchCity = !selectedDashboardCity || o.city === selectedDashboardCity;
@@ -87,15 +85,10 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
       return matchBrand && matchCity && matchStatus;
     }).length;
 
-    const totalSelectedInRange = dashboardOutlets.length;
-    const live = dashboardOutlets.filter(o => o.currentStage === Stage.OUTLET_LIVE).length;
-    
     return { 
-      totalSelectedInRange, 
-      portfolioTotal, 
-      live 
+      portfolioTotal
     };
-  }, [outlets, dashboardOutlets, selectedDashboardBrand, selectedDashboardCity, selectedDashboardStatus]);
+  }, [outlets, selectedDashboardBrand, selectedDashboardCity, selectedDashboardStatus]);
 
   // --- Pipeline Trend (Filtered for Dashboard) ---
   const dashboardTrendData = useMemo(() => {
@@ -111,7 +104,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
     return { trend, maxCount };
   }, [dashboardOutlets, historyDays]);
 
-  // --- Brand Performance (For Brands Tab) ---
   const brandMetrics = useMemo(() => {
     const metrics = BRANDS.map(brandName => {
       const brandOutlets = outlets.filter(o => o.brand === brandName);
@@ -169,7 +161,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
 
   const getStageInfo = (stageId: Stage) => STAGES.find(s => s.id === stageId);
 
-  // Helper to find log for a specific stage in the selected outlet's history
   const getStageLog = (stageId: Stage) => {
     if (!selectedOutlet) return undefined;
     for (let i = selectedOutlet.history.length - 1; i >= 0; i--) {
@@ -274,7 +265,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
           </button>
         </div>
 
-        {/* Global Toolbar for Fixed Date Selection */}
         {(activeTab === 'dashboard' || activeTab === 'brands') && (
           <div className="px-8 py-3 bg-white/80 backdrop-blur-md border-b border-slate-50 flex justify-end items-center z-30 shrink-0">
             {renderGlobalDatePicker()}
@@ -286,10 +276,10 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
           {/* --- DASHBOARD TAB --- */}
           {activeTab === 'dashboard' && (
             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {/* BRAND & CITY & STATUS SELECTOR KPI */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between col-span-1">
-                  <div className="space-y-3">
+                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Focus Brand</p>
                       <div className="relative">
@@ -336,30 +326,16 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                 </div>
 
                 {/* Overall Portfolio Count KPI (Ignoring Date Filter) */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Total Brand Portfolio</p>
-                  <div className="flex items-end justify-between">
+                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Total Brand Portfolio</p>
                     <h4 className="text-4xl font-black text-slate-800">{dashboardStats.portfolioTotal}</h4>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-slate-400 block uppercase">Overall Registry</span>
-                      <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
-                        <i className="fa-solid fa-globe mr-1"></i> Selection Base
-                      </span>
-                    </div>
                   </div>
-                </div>
-
-                {/* Selected Outlets KPI (Strictly respecting Date Filter) */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Selected Outlets</p>
-                  <div className="flex items-end justify-between">
-                    <h4 className="text-4xl font-black text-indigo-600">{dashboardStats.totalSelectedInRange}</h4>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-slate-400 block">PERIOD: {formatDate(dateRange.start)}</span>
-                      <span className="text-[9px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded">
-                        <i className="fa-solid fa-calendar-check mr-1"></i> Time Filtered
-                      </span>
-                    </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">Overall Registry</span>
+                    <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                      <i className="fa-solid fa-globe mr-1"></i> Selection Base
+                    </span>
                   </div>
                 </div>
               </div>
@@ -370,7 +346,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                   <div>
                     <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em]">Pipeline Activity Trend</h5>
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                      {selectedDashboardBrand || selectedDashboardCity || selectedDashboardStatus ? `Filtered period movements` : 'Movements within selected range'}
+                      Activity across selected period
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -421,7 +397,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                   <div>
                     <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em]">Selection Results</h5>
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                      Viewing {dashboardOutlets.length} outlets active between {formatDate(dateRange.start)} and {formatDate(dateRange.end)}
+                      Viewing {dashboardOutlets.length} outlets active in focus period
                     </p>
                   </div>
                 </div>
@@ -503,7 +479,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
           {activeTab === 'brands' && (
              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
                 {selectedBrandName ? (
-                  /* Drill-down View */
                   <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                     <button 
                       onClick={() => setSelectedBrandName(null)}
@@ -517,7 +492,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                        <div className="flex items-center justify-between mb-8">
                           <div>
                             <h4 className="text-2xl font-black text-slate-800">{selectedBrandName}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Operational Summary for Selected Period</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Operational Summary</p>
                           </div>
                        </div>
 
@@ -574,82 +549,79 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                     </div>
                   </div>
                 ) : (
-                  /* Summary Grid View */
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in zoom-in duration-300 pb-12">
-                    {brandMetrics.map((brand) => {
-                        return (
-                          <div 
-                            key={brand?.name} 
-                            className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all flex flex-col group"
-                          >
-                               <div className="flex justify-between items-start mb-8">
-                                  <div>
-                                     <h4 className="text-xl font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{brand?.name}</h4>
-                                     <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
-                                        Period Outlets: <span className="text-slate-900">{brand?.total}</span>
-                                     </p>
-                                  </div>
-                               </div>
+                    {brandMetrics.map((brand) => (
+                      <div 
+                        key={brand?.name} 
+                        className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all flex flex-col group"
+                      >
+                           <div className="flex justify-between items-start mb-8">
+                              <div>
+                                 <h4 className="text-xl font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{brand?.name}</h4>
+                                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
+                                    Period Outlets: <span className="text-slate-900">{brand?.total}</span>
+                                 </p>
+                              </div>
+                           </div>
 
-                               <div className="flex-1 flex flex-col mb-4">
-                                  <div className="flex items-center justify-between mb-4">
-                                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Selected Flow</span>
-                                     <div className="flex gap-2">
-                                        <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">
-                                           {brand?.live} Live
-                                        </span>
-                                        {brand?.delayed > 0 && (
-                                           <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">
-                                              {brand?.delayed} Stalled
-                                           </span>
-                                        )}
-                                     </div>
-                                  </div>
+                           <div className="flex-1 flex flex-col mb-4">
+                              <div className="flex items-center justify-between mb-4">
+                                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Process Flow</span>
+                                 <div className="flex gap-2">
+                                    <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                       {brand?.live} Live
+                                    </span>
+                                    {brand?.delayed > 0 && (
+                                       <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">
+                                          {brand?.delayed} Stalled
+                                       </span>
+                                    )}
+                                 </div>
+                              </div>
 
-                                  <div className="relative h-32 flex items-end gap-1 pr-10">
-                                     {brand?.historyTrend.map((t, i) => (
-                                        <div key={i} className="flex-1 group/bar relative h-full flex flex-col justify-end">
-                                           <div 
-                                              className="w-full bg-indigo-500/10 rounded-t-[4px] transition-all duration-500 hover:bg-indigo-500/30 cursor-pointer relative"
-                                              style={{ height: `${(t.count / (brand?.maxTrendCount || 1)) * 100}%` }}
-                                           >
-                                              {t.count > 0 && (
-                                                 <div className="absolute inset-0 bg-indigo-500 rounded-t-[4px] opacity-60"></div>
-                                              )}
-                                           </div>
-                                        </div>
-                                     ))}
-                                  </div>
-                               </div>
+                              <div className="relative h-32 flex items-end gap-1 pr-10">
+                                 {brand?.historyTrend.map((t, i) => (
+                                    <div key={i} className="flex-1 group/bar relative h-full flex flex-col justify-end">
+                                       <div 
+                                          className="w-full bg-indigo-500/10 rounded-t-[4px] transition-all duration-500 hover:bg-indigo-500/30 cursor-pointer relative"
+                                          style={{ height: `${(t.count / (brand?.maxTrendCount || 1)) * 100}%` }}
+                                       >
+                                          {t.count > 0 && (
+                                             <div className="absolute inset-0 bg-indigo-500 rounded-t-[4px] opacity-60"></div>
+                                          )}
+                                       </div>
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
 
-                               <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
-                                  <div className="flex-1 pr-8">
-                                     <div className="flex justify-between items-center mb-1.5">
-                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Health</span>
-                                        <span className={`text-[9px] font-black ${(brand?.health || 0) > 70 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                           {brand?.health}%
-                                        </span>
-                                     </div>
-                                     <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
-                                        <div 
-                                           className={`h-full rounded-full transition-all duration-1000 ${
-                                              (brand?.health || 0) > 70 ? 'bg-emerald-500' : (brand?.health || 0) > 40 ? 'bg-amber-400' : 'bg-rose-500'
-                                           }`}
-                                           style={{ width: `${brand?.health}%` }}
-                                        ></div>
-                                     </div>
-                                  </div>
-                                  <button 
-                                     onClick={() => setSelectedBrandName(brand?.name || null)}
-                                     className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center gap-1.5 transition-colors"
-                                  >
-                                     View
-                                     <i className="fa-solid fa-arrow-right-long"></i>
-                                  </button>
-                               </div>
-                          </div>
-                        );
-                    })}
+                           <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
+                              <div className="flex-1 pr-8">
+                                 <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Health</span>
+                                    <span className={`text-[9px] font-black ${(brand?.health || 0) > 70 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                       {brand?.health}%
+                                    </span>
+                                 </div>
+                                 <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
+                                    <div 
+                                       className={`h-full rounded-full transition-all duration-1000 ${
+                                          (brand?.health || 0) > 70 ? 'bg-emerald-500' : (brand?.health || 0) > 40 ? 'bg-amber-400' : 'bg-rose-500'
+                                       }`}
+                                       style={{ width: `${brand?.health}%` }}
+                                    ></div>
+                                 </div>
+                              </div>
+                              <button 
+                                 onClick={() => setSelectedBrandName(brand?.name || null)}
+                                 className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center gap-1.5 transition-colors"
+                              >
+                                 View
+                                 <i className="fa-solid fa-arrow-right-long"></i>
+                              </button>
+                           </div>
+                      </div>
+                    ))}
                   </div>
                 )}
              </div>
@@ -711,7 +683,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                                   <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">{selectedOutlet.brand}</span>
                               )}
                               {selectedOutlet.city && (
-                                  <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">{selectedDashboardCity || selectedOutlet.city}</span>
+                                  <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">{selectedOutlet.city}</span>
                               )}
                               <span className={`text-[10px] font-bold border px-2 py-0.5 rounded uppercase tracking-wider ${getStatusBadgeStyle(selectedOutlet.status)}`}>
                                 {selectedOutlet.status}
@@ -728,10 +700,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ outlets, onClose, initi
                     </div>
 
                     <div className="relative">
-                      {/* Static base vertical line */}
                       <div className="absolute left-[21px] top-4 bottom-4 w-0.5 bg-slate-100"></div>
                       
-                      {/* Dynamic colored vertical line segment for progress */}
                       {(() => {
                         const currentIdx = STAGE_ORDER.indexOf(selectedOutlet.currentStage);
                         return (
