@@ -17,16 +17,31 @@ export interface StageLog {
   note?: string;
 }
 
+export type OutletStatus = 
+  | 'Active' 
+  | 'Inactive' 
+  | 'Closed' 
+  | 'Deboarded' 
+  | 'Training pending' 
+  | 'Confirmation Pending' 
+  | 'onboarding in progress';
+
 export interface Outlet {
   id: string;
   name: string;
+  brand?: string;
+  city?: string;
+  status: OutletStatus;
   description: string;
   note?: string;
   currentStage: Stage;
   createdAt: number;
   lastMovedAt: number;
-  priority: 'low' | 'medium' | 'high';
   history: StageLog[];
+  isArchived?: boolean;
+  archivedAt?: number;
+  // Temporary field used during import to determine behavior
+  importAction?: 'New' | 'Update';
 }
 
 export interface StageInfo {
@@ -34,5 +49,5 @@ export interface StageInfo {
   label: string;
   color: string;
   icon: string;
-  targetDays: number; // New: Target days to complete this stage
+  targetDays: number;
 }

@@ -1,35 +1,32 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { Stage, Outlet, StageLog } from './types.ts';
+import { Stage, Outlet, StageLog, OutletStatus } from './types.ts';
 import { STAGES, STAGE_ORDER } from './constants.ts';
 import OutletCard from './components/OutletCard.tsx';
 import AddOutletModal from './components/AddOutletModal.tsx';
-import EditOutletModal from './components/EditOutletModal.tsx';
-import AIReportModal from './components/AIReportModal.tsx';
+import EditOutletModal from '././components/EditOutletModal.tsx';
 import AnalyticsModal from './components/AnalyticsModal.tsx';
-import { getAIStatusReport } from './services/geminiService.ts';
+import ImportModal from './components/ImportModal.tsx';
+import ArchiveModal from './components/ArchiveModal.tsx';
 
 const App: React.FC = () => {
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null);
   const [activeAnalyticsOutletId, setActiveAnalyticsOutletId] = useState<string | undefined>(undefined);
-  const [selectedOutletForAI, setSelectedOutletForAI] = useState<Outlet | null>(null);
-  const [aiReport, setAiReport] = useState<any>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Live Clock Update
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Update every minute
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
-  // Format the live date
   const formattedLiveDate = useMemo(() => {
     return new Intl.DateTimeFormat('en-US', {
       weekday: 'long',
@@ -47,7 +44,6 @@ const App: React.FC = () => {
     }).format(currentTime);
   }, [currentTime]);
 
-  // Initialize data safely
   useEffect(() => {
     try {
       const saved = localStorage.getItem('outlet_pipeline_data');
@@ -58,26 +54,15 @@ const App: React.FC = () => {
           {
             id: '1',
             name: 'Urban Bites - Downtown',
+            brand: 'Dil Daily',
+            city: 'Bangalore',
+            status: 'onboarding in progress',
             description: 'Premium cloud kitchen specializing in fusion street food.',
             currentStage: Stage.ONBOARDING_REQUEST,
             createdAt: Date.now() - 86400000 * 2,
             lastMovedAt: Date.now() - 86400000 * 2,
-            priority: 'high',
-            history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 2, note: 'Initial request received.' }]
-          },
-          {
-            id: '2',
-            name: 'Green Leaf Salads',
-            description: 'Health-conscious salad bar with focus on organic produce.',
-            currentStage: Stage.CHEF_APPROVAL,
-            createdAt: Date.now() - 86400000 * 5,
-            lastMovedAt: Date.now() - 86400000,
-            priority: 'medium',
-            history: [
-              { stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 5, note: 'Documentation complete.' },
-              { stage: Stage.OVERLAP_CHECK, timestamp: Date.now() - 86400000 * 3, note: 'No territory overlaps found.' },
-              { stage: Stage.CHEF_APPROVAL, timestamp: Date.now() - 86400000, note: 'Menu pending tasting session.' }
-            ]
+            history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now() - 86400000 * 2, note: 'Initial request received.' }],
+            isArchived: false
           }
         ];
         setOutlets(initial);
@@ -87,29 +72,81 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Save data whenever it changes
   useEffect(() => {
-    if (outlets.length > 0) {
-      localStorage.setItem('outlet_pipeline_data', JSON.stringify(outlets));
-    }
+    localStorage.setItem('outlet_pipeline_data', JSON.stringify(outlets));
   }, [outlets]);
 
-  const handleAddOutlet = (name: string, description: string, priority: 'low' | 'medium' | 'high', note: string) => {
+  const handleAddOutlet = (name: string, description: string, note: string, status: OutletStatus, brand?: string, city?: string) => {
     const newOutlet: Outlet = {
       id: Math.random().toString(36).substr(2, 9),
       name,
+      brand,
+      city,
+      status,
       description,
       currentStage: Stage.ONBOARDING_REQUEST,
       createdAt: Date.now(),
       lastMovedAt: Date.now(),
-      priority,
-      history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now(), note }]
+      history: [{ stage: Stage.ONBOARDING_REQUEST, timestamp: Date.now(), note }],
+      isArchived: false
     };
     setOutlets(prev => [...prev, newOutlet]);
   };
 
-  const handleDeleteOutlet = (id: string) => {
-    if (confirm('Are you sure you want to delete this outlet entry?')) {
+  const handleImportOutlets = (importedOutlets: Outlet[]) => {
+    setOutlets(prev => {
+      const updatedList = [...prev];
+      importedOutlets.forEach(imp => {
+        const idx = updatedList.findIndex(o => o.name.toLowerCase() === imp.name.toLowerCase());
+        if (imp.importAction === 'Update' && idx !== -1) {
+          const existing = updatedList[idx];
+          const stageChanged = existing.currentStage !== imp.currentStage;
+          const newHistory = [...existing.history];
+          
+          if (stageChanged) {
+            newHistory.push({ 
+              stage: imp.currentStage, 
+              timestamp: imp.lastMovedAt || Date.now(), 
+              note: 'Moved via bulk data import' 
+            });
+          }
+
+          updatedList[idx] = {
+            ...existing,
+            brand: imp.brand || existing.brand,
+            city: imp.city || existing.city,
+            status: imp.status || existing.status,
+            currentStage: imp.currentStage,
+            lastMovedAt: stageChanged ? (imp.lastMovedAt || Date.now()) : existing.lastMovedAt,
+            history: newHistory,
+            description: existing.description.includes('Imported from Excel') || existing.description.length < 5 
+              ? imp.description 
+              : existing.description
+          };
+        } else {
+          const { importAction, ...cleanOutlet } = imp;
+          updatedList.push({ ...(cleanOutlet as Outlet), isArchived: false });
+        }
+      });
+      return updatedList;
+    });
+    setIsImportModalOpen(false);
+  };
+
+  const handleArchiveOutlet = (id: string) => {
+    setOutlets(prev => prev.map(o => 
+      o.id === id ? { ...o, isArchived: true, archivedAt: Date.now() } : o
+    ));
+  };
+
+  const handleRestoreOutlet = (id: string) => {
+    setOutlets(prev => prev.map(o => 
+      o.id === id ? { ...o, isArchived: false, archivedAt: undefined } : o
+    ));
+  };
+
+  const handlePermanentDelete = (id: string) => {
+    if (confirm('Permanently delete this outlet? This action cannot be undone.')) {
       setOutlets(prev => prev.filter(o => o.id !== id));
     }
   };
@@ -118,7 +155,6 @@ const App: React.FC = () => {
     setOutlets(prev => prev.map(o => {
       if (o.id === id) {
         const newHistory = [...o.history];
-        
         let currentIdx = -1;
         for (let i = newHistory.length - 1; i >= 0; i--) {
           if (newHistory[i].stage === o.currentStage) {
@@ -126,7 +162,6 @@ const App: React.FC = () => {
             break;
           }
         }
-
         if (currentIdx !== -1) {
           newHistory[currentIdx] = { ...newHistory[currentIdx], note };
         } else {
@@ -147,18 +182,11 @@ const App: React.FC = () => {
       if (o.id === id) {
         const currentIndex = STAGE_ORDER.indexOf(o.currentStage);
         const nextIndex = direction === 'forward' ? currentIndex + 1 : currentIndex - 1;
-        
         if (nextIndex >= 0 && nextIndex < STAGE_ORDER.length) {
           const newStage = STAGE_ORDER[nextIndex];
           const newHistory = [...(o.history || [])];
           newHistory.push({ stage: newStage, timestamp: Date.now() });
-          
-          return {
-            ...o,
-            currentStage: newStage,
-            lastMovedAt: Date.now(),
-            history: newHistory
-          };
+          return { ...o, currentStage: newStage, lastMovedAt: Date.now(), history: newHistory };
         }
       }
       return o;
@@ -170,23 +198,22 @@ const App: React.FC = () => {
     setIsAnalyticsOpen(true);
   };
 
-  const handleAIAnalysis = async (outlet: Outlet) => {
-    setSelectedOutletForAI(outlet);
-    setIsAiLoading(true);
-    const report = await getAIStatusReport(outlet);
-    setAiReport(report);
-    setIsAiLoading(false);
-  };
+  // Only show non-archived outlets in the main pipeline
+  const activeOutlets = useMemo(() => outlets.filter(o => !o.isArchived), [outlets]);
+  const archivedOutlets = useMemo(() => outlets.filter(o => o.isArchived), [outlets]);
 
   const filteredOutlets = useMemo(() => {
-    if (!searchTerm.trim()) return outlets;
+    if (!searchTerm.trim()) return activeOutlets;
     const term = searchTerm.toLowerCase();
-    return outlets.filter(o => 
+    return activeOutlets.filter(o => 
       o.name.toLowerCase().includes(term) || 
+      (o.brand?.toLowerCase() || '').includes(term) ||
+      (o.city?.toLowerCase() || '').includes(term) ||
+      (o.status?.toLowerCase() || '').includes(term) ||
       o.description.toLowerCase().includes(term) || 
       o.history.some(h => h.note?.toLowerCase().includes(term))
     );
-  }, [outlets, searchTerm]);
+  }, [activeOutlets, searchTerm]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col h-screen overflow-hidden">
@@ -201,9 +228,9 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 mt-0.5">
                 <p className="text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest">Pipeline</p>
                 <span className="text-slate-200 text-[8px]">|</span>
-                <p className="text-indigo-500 text-[9px] sm:text-[10px] font-bold whitespace-nowrap">
-                  <i className="fa-regular fa-calendar-check mr-1"></i>
-                  {formattedLiveDate} <span className="ml-1 opacity-70">{formattedLiveTime}</span>
+                <p className="text-indigo-50 text-[9px] sm:text-[10px] font-bold whitespace-nowrap bg-indigo-600 px-2 py-0.5 rounded-full">
+                  <i className="fa-regular fa-calendar-check mr-1 text-white"></i>
+                  <span className="text-white">{formattedLiveDate}</span> <span className="ml-1 text-indigo-100 font-medium">{formattedLiveTime}</span>
                 </p>
               </div>
             </div>
@@ -215,7 +242,7 @@ const App: React.FC = () => {
             </div>
             <input
               type="text"
-              placeholder="Search outlets or notes..."
+              placeholder="Search outlets, cities, status..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-full sm:rounded-2xl py-2.5 sm:py-3 pl-10 pr-10 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white transition-all shadow-sm"
@@ -223,15 +250,34 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
+             <button 
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex-1 sm:flex-none bg-white hover:bg-slate-50 text-slate-600 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-slate-200 flex items-center justify-center transition-all active:scale-95"
+            >
+              <i className="fa-solid fa-file-import sm:mr-2"></i>
+              <span className="hidden sm:inline">Import</span>
+            </button>
             <button 
               onClick={() => {
                 setActiveAnalyticsOutletId(undefined);
                 setIsAnalyticsOpen(true);
               }}
-              className="flex-1 sm:flex-none bg-white hover:bg-slate-50 text-slate-600 px-3 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-slate-200 flex items-center justify-center transition-all active:scale-95"
+              className="flex-1 sm:flex-none bg-white hover:bg-slate-50 text-slate-600 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-slate-200 flex items-center justify-center transition-all active:scale-95"
             >
               <i className="fa-solid fa-chart-line sm:mr-2"></i>
               <span className="hidden sm:inline">Analytics</span>
+            </button>
+            <button 
+              onClick={() => setIsArchiveOpen(true)}
+              className="relative flex-1 sm:flex-none bg-white hover:bg-slate-50 text-slate-600 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border border-slate-200 flex items-center justify-center transition-all active:scale-95"
+            >
+              <i className="fa-solid fa-trash-can sm:mr-2"></i>
+              <span className="hidden sm:inline">Bin</span>
+              {archivedOutlets.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                  {archivedOutlets.length}
+                </span>
+              )}
             </button>
             
             <button 
@@ -250,7 +296,7 @@ const App: React.FC = () => {
         <div className="flex gap-4 sm:gap-6 min-w-max h-full pb-4">
           {STAGES.map((stage, index) => {
             const stageOutlets = filteredOutlets.filter(o => o.currentStage === stage.id);
-            const totalStageCount = outlets.filter(o => o.currentStage === stage.id).length;
+            const totalStageCount = activeOutlets.filter(o => o.currentStage === stage.id).length;
             
             return (
               <div key={stage.id} className="flex flex-col w-[280px] sm:w-[320px] pipeline-column">
@@ -274,8 +320,7 @@ const App: React.FC = () => {
                         key={outlet.id} 
                         outlet={outlet} 
                         onMove={handleMoveOutlet}
-                        onAnalyze={handleAIAnalysis}
-                        onDelete={handleDeleteOutlet}
+                        onDelete={handleArchiveOutlet}
                         onShowHistory={handleShowHistory}
                         onUpdateNote={handleUpdateNote}
                         onEdit={setEditingOutlet}
@@ -296,19 +341,18 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <footer className="hidden sm:block bg-white border-t border-slate-200 px-6 py-2.5 safe-bottom">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-end text-[9px] font-medium text-slate-400 uppercase tracking-widest">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Per-Stage Notes Active</span>
-          </div>
-        </div>
-      </footer>
-
       {isAddModalOpen && (
         <AddOutletModal 
           onClose={() => setIsAddModalOpen(false)} 
           onAdd={handleAddOutlet} 
+        />
+      )}
+
+      {isImportModalOpen && (
+        <ImportModal
+          outlets={activeOutlets}
+          onClose={() => setIsImportModalOpen(false)}
+          onImport={handleImportOutlets}
         />
       )}
 
@@ -317,26 +361,24 @@ const App: React.FC = () => {
           outlet={editingOutlet}
           onClose={() => setEditingOutlet(null)}
           onSave={handleSaveEdit}
+          onDelete={handleArchiveOutlet}
         />
       )}
 
       {isAnalyticsOpen && (
         <AnalyticsModal 
-          outlets={outlets}
+          outlets={activeOutlets}
           initialSelectedId={activeAnalyticsOutletId}
           onClose={() => setIsAnalyticsOpen(false)} 
         />
       )}
 
-      {selectedOutletForAI && (
-        <AIReportModal 
-          outletName={selectedOutletForAI.name}
-          isLoading={isAiLoading}
-          report={aiReport}
-          onClose={() => {
-            setSelectedOutletForAI(null);
-            setAiReport(null);
-          }}
+      {isArchiveOpen && (
+        <ArchiveModal
+          outlets={archivedOutlets}
+          onRestore={handleRestoreOutlet}
+          onDeletePermanent={handlePermanentDelete}
+          onClose={() => setIsArchiveOpen(false)}
         />
       )}
     </div>

@@ -1,23 +1,27 @@
 
 import React, { useState } from 'react';
 import { generateOutletDescription } from '../services/geminiService.ts';
+import { BRANDS, CITIES, STATUSES } from '../constants.ts';
+import { OutletStatus } from '../types.ts';
 
 interface AddOutletModalProps {
   onClose: () => void;
-  onAdd: (name: string, description: string, priority: 'low' | 'medium' | 'high', note: string) => void;
+  onAdd: (name: string, description: string, note: string, status: OutletStatus, brand?: string, city?: string) => void;
 }
 
 const AddOutletModal: React.FC<AddOutletModalProps> = ({ onClose, onAdd }) => {
   const [name, setName] = useState('');
+  const [brand, setBrand] = useState('');
+  const [city, setCity] = useState('');
+  const [status, setStatus] = useState<OutletStatus>('onboarding in progress');
   const [description, setDescription] = useState('');
   const [note, setNote] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onAdd(name, description || 'New outlet request.', priority, note);
+    onAdd(name, description || 'New outlet request.', note, status, brand || undefined, city || undefined);
     onClose();
   };
 
@@ -27,6 +31,14 @@ const AddOutletModal: React.FC<AddOutletModalProps> = ({ onClose, onAdd }) => {
     const desc = await generateOutletDescription(name);
     setDescription(desc);
     setIsGenerating(false);
+  };
+
+  const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedBrand = e.target.value;
+    setBrand(selectedBrand);
+    if (selectedBrand && !name) {
+      setName(selectedBrand);
+    }
   };
 
   return (
@@ -40,15 +52,65 @@ const AddOutletModal: React.FC<AddOutletModalProps> = ({ onClose, onAdd }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Brand</label>
+              <div className="relative">
+                <select
+                  value={brand}
+                  onChange={handleBrandChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none appearance-none font-medium text-slate-700"
+                >
+                  <option value="">-- Brand --</option>
+                  {BRANDS.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+                <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none"></i>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">City</label>
+              <div className="relative">
+                <select
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none appearance-none font-medium text-slate-700"
+                >
+                  <option value="">-- City --</option>
+                  {CITIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none"></i>
+              </div>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Outlet Name</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Operational Status</label>
+            <div className="relative">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as OutletStatus)}
+                className="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none appearance-none font-bold text-indigo-700"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 text-[10px] pointer-events-none"></i>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Outlet Name / Location</label>
             <input
-              autoFocus
               required
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Central Kitchen Express"
+              placeholder="e.g. Dil Daily - Koramangala"
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
             />
           </div>
@@ -73,37 +135,6 @@ const AddOutletModal: React.FC<AddOutletModalProps> = ({ onClose, onAdd }) => {
               rows={2}
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none text-sm"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Internal Notes (Optional)</label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Operational notes, special requirements..."
-              rows={2}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none resize-none text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Priority Level</label>
-            <div className="grid grid-cols-3 gap-3">
-              {(['low', 'medium', 'high'] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPriority(p)}
-                  className={`py-2 text-xs font-bold rounded-xl border transition-all uppercase tracking-wider ${
-                    priority === p 
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' 
-                      : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
           </div>
 
           <button

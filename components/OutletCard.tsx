@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Outlet, Stage } from '../types.ts';
 import { STAGE_ORDER } from '../constants.ts';
@@ -5,18 +6,16 @@ import { STAGE_ORDER } from '../constants.ts';
 interface OutletCardProps {
   outlet: Outlet;
   onMove: (id: string, direction: 'forward' | 'backward') => void;
-  onAnalyze: (outlet: Outlet) => void;
   onDelete: (id: string) => void;
   onShowHistory: (id: string) => void;
   onUpdateNote: (id: string, note: string) => void;
   onEdit: (outlet: Outlet) => void;
 }
 
-const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDelete, onShowHistory, onUpdateNote, onEdit }) => {
+const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onDelete, onShowHistory, onUpdateNote, onEdit }) => {
   const [isEditingNote, setIsEditingNote] = useState(false);
   
   const currentStageNote = useMemo(() => {
-    // FIX: Manual loop replacement for findLast to support older TypeScript targets
     let lastLog = undefined;
     for (let i = outlet.history.length - 1; i >= 0; i--) {
       if (outlet.history[i].stage === outlet.currentStage) {
@@ -29,7 +28,6 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
 
   const [tempNote, setTempNote] = useState(currentStageNote);
 
-  // Sync tempNote when stage changes or history updates externally
   React.useEffect(() => {
     setTempNote(currentStageNote);
   }, [currentStageNote]);
@@ -38,10 +36,17 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
   const canMoveBackward = stageIndex > 0;
   const canMoveForward = stageIndex < STAGE_ORDER.length - 1;
 
-  const priorityColors = {
-    low: 'bg-gray-100 text-gray-600',
-    medium: 'bg-blue-100 text-blue-600',
-    high: 'bg-rose-100 text-rose-600',
+  const getStatusStyle = (status: string) => {
+    switch(status.toLowerCase()) {
+      case 'active': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'inactive': return 'bg-slate-50 text-slate-500 border-slate-100';
+      case 'closed': return 'bg-rose-50 text-rose-600 border-rose-100';
+      case 'deboarded': return 'bg-orange-50 text-orange-600 border-orange-100';
+      case 'training pending': return 'bg-amber-50 text-amber-600 border-amber-100';
+      case 'confirmation pending': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+      case 'onboarding in progress': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
+      default: return 'bg-slate-50 text-slate-500 border-slate-100';
+    }
   };
 
   const daysInStage = Math.floor((Date.now() - outlet.lastMovedAt) / (1000 * 60 * 60 * 24));
@@ -63,10 +68,7 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
       onClick={() => onEdit(outlet)}
       className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all group overflow-hidden cursor-pointer hover:border-indigo-200"
     >
-      <div className="flex justify-between items-start mb-2">
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${priorityColors[outlet.priority]}`}>
-          {outlet.priority}
-        </span>
+      <div className="flex justify-end items-start mb-2">
         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <button 
             onClick={(e) => { e.stopPropagation(); setIsEditingNote(!isEditingNote); }}
@@ -91,11 +93,22 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
           </button>
         </div>
       </div>
+      
+      <div className="flex gap-1.5 flex-wrap mb-1">
+        {outlet.brand && (
+          <span className="text-[10px] font-bold text-white bg-slate-800 px-2 py-0.5 rounded-md truncate">
+            {outlet.brand}
+          </span>
+        )}
+        <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-md truncate ${getStatusStyle(outlet.status)}`}>
+          {outlet.status}
+        </span>
+      </div>
 
       <h4 className="font-semibold text-slate-800 text-sm mb-1 truncate" title={outlet.name}>
         {outlet.name}
       </h4>
-      <p className="text-slate-500 text-xs line-clamp-2 mb-3 leading-relaxed">
+      <p className="text-slate-500 text-[11px] line-clamp-2 mb-3 leading-relaxed">
         {outlet.description}
       </p>
 
@@ -123,9 +136,17 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
         </div>
       ) : null}
 
-      <div className="flex items-center text-[10px] text-slate-400 mb-4">
-        <i className="fa-regular fa-clock mr-1"></i>
-        {daysInStage === 0 ? 'Moved today' : `${daysInStage}d in stage`}
+      <div className="flex items-center justify-between text-[10px] text-slate-400 mb-4">
+        <div className="flex items-center">
+          <i className="fa-regular fa-clock mr-1"></i>
+          {daysInStage === 0 ? 'Today' : `${daysInStage}d`}
+        </div>
+        {outlet.city && (
+          <div className="flex items-center opacity-60">
+            <i className="fa-solid fa-location-dot mr-1 text-[8px]"></i>
+            {outlet.city}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-50 pt-3">
@@ -145,14 +166,6 @@ const OutletCard: React.FC<OutletCardProps> = ({ outlet, onMove, onAnalyze, onDe
             <i className="fa-solid fa-chevron-right text-[10px]"></i>
           </button>
         </div>
-        
-        <button
-          onClick={(e) => { e.stopPropagation(); onAnalyze(outlet); }}
-          className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md hover:bg-indigo-100 transition-colors flex items-center"
-        >
-          <i className="fa-solid fa-wand-sparkles mr-1.5"></i>
-          AI Insights
-        </button>
       </div>
     </div>
   );

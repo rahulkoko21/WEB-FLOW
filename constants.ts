@@ -1,5 +1,36 @@
 
-import { Stage, StageInfo } from './types.ts';
+import { Stage, StageInfo, OutletStatus } from './types.ts';
+
+export const BRANDS = [
+  'Dil Daily',
+  'Bihari Bowl',
+  'Aahar',
+  'Bhole Ke Chole',
+  'Khichdi Bar',
+  'The Chaat Cult',
+  'Vegerama Pure Veg and Fasting Specials',
+  'House of Andhra',
+  'The Junglee Kitchen'
+];
+
+export const CITIES = [
+  'Bangalore',
+  'Hyderabad',
+  'Chennai',
+  'Pune',
+  'Mumbai',
+  'Ahmedabad'
+];
+
+export const STATUSES: OutletStatus[] = [
+  'Active',
+  'Inactive',
+  'Closed',
+  'Deboarded',
+  'Training pending',
+  'Confirmation Pending',
+  'onboarding in progress'
+];
 
 export const STAGES: StageInfo[] = [
   { id: Stage.ONBOARDING_REQUEST, label: 'Onboarding Request', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: 'fa-file-import', targetDays: 2 },
